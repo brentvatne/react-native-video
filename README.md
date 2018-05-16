@@ -170,6 +170,7 @@ using System.Collections.Generic;
        onLoad={this.setDuration}               // Callback when video loads
        onProgress={this.setTime}               // Callback every ~250ms with currentTime
        onEnd={this.onEnd}                      // Callback when playback finishes
+       onSaved={this.onSaved}                  // Callback when video gets saved
        onError={this.videoError}               // Callback when video cannot be loaded
        onBuffer={this.onBuffer}                // Callback when remote video is buffering
        onTimedMetadata={this.onTimedMetadata}  // Callback when the stream receive some metadata
@@ -214,6 +215,7 @@ To see full list of available props, you can check [the propTypes](https://githu
        onLoad={this.setDuration}    // Callback when video loads
        onProgress={this.setTime}    // Callback every ~250ms with currentTime
        onEnd={this.onEnd}           // Callback when playback finishes
+       onSaved={this.onSaved}       // Callback when video gets saved
        onError={this.videoError}    // Callback when video cannot be loaded
        style={styles.backgroundVideo} />
 
