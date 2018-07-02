@@ -63,6 +63,10 @@ export default class Video extends Component {
     }
   };
 
+  reload = (uri)=>{
+    this.setNativeProps({ src: {uri:uri} });
+  }
+
   presentFullscreenPlayer = () => {
     this.setNativeProps({ fullscreen: true });
   };
@@ -338,6 +342,8 @@ Video.propTypes = {
   volume: PropTypes.number,
   stereoPan: PropTypes.number,
   rate: PropTypes.number,
+  isLive: PropTypes.bool,
+  videoType: PropTypes.number,
   playInBackground: PropTypes.bool,
   playWhenInactive: PropTypes.bool,
   ignoreSilentSwitch: PropTypes.oneOf(['ignore', 'obey']),

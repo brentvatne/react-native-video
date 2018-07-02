@@ -284,6 +284,12 @@ static NSString *const timedMetadata = @"timedMetadata";
   [self removePlayerLayer];
   [self removePlayerTimeObserver];
   [self removePlayerItemObservers];
+
+  NSString *uri = [source objectForKey:@"uri"];
+  if(!uri || uri.length == 0){
+  	return;
+  }
+  
   _playerItem = [self playerItemForSource:source];
   [self addPlayerItemObservers];
 
