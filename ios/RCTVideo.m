@@ -15,6 +15,9 @@ static NSString *const timedMetadata = @"timedMetadata";
 
 static int const RCTVideoUnset = -1;
 
+static NSNumber *currentTime;
+static NSNumber *timescale;
+
 @implementation RCTVideo
 {
   AVPlayer *_player;
@@ -104,12 +107,13 @@ static int const RCTVideoUnset = -1;
   return self;
 }
 
-- (AVPlayerViewController*)createPlayerViewController:(AVPlayer*)player withPlayerItem:(AVPlayerItem*)playerItem {
+//Modifying the player creation to get the AVURLAsset instead of passing player
+- (AVPlayerViewController*)createPlayerViewControllerWithPlayerItem:(AVPlayerItem*)playerItem {
     RCTVideoPlayerViewController* playerLayer= [[RCTVideoPlayerViewController alloc] init];
     playerLayer.showsPlaybackControls = YES;
     playerLayer.rctDelegate = self;
     playerLayer.view.frame = self.bounds;
-    playerLayer.player = player;
+    playerLayer.player = [[AVPlayer alloc] initWithURL:[self urlOfCurrentlyPlayingInPlayer:_player]];
     playerLayer.view.frame = self.bounds;
     return playerLayer;
 }
@@ -148,7 +152,13 @@ static int const RCTVideoUnset = -1;
   __weak RCTVideo *weakSelf = self;
   _timeObserver = [_player addPeriodicTimeObserverForInterval:CMTimeMakeWithSeconds(progressUpdateIntervalMS, NSEC_PER_SEC)
                                                         queue:NULL
-                                                   usingBlock:^(CMTime time) { [weakSelf sendProgressUpdate]; }
+                                                   usingBlock:^(CMTime time) {
+                                                       if (! [weakSelf getFullscreen] && !_playerViewController) {
+                                                           currentTime = [NSNumber numberWithFloat:(Float64)_playerItem.currentTime.value/(int32_t)_playerItem.currentTime.timescale];
+                                                           timescale = [NSNumber numberWithFloat:(int32_t)_playerItem.currentTime.timescale];
+                                                           [weakSelf sendProgressUpdate];
+                                                       }
+                                                   }
                    ];
 }
 
@@ -223,22 +233,23 @@ static int const RCTVideoUnset = -1;
       return;
    }
 
-   CMTime currentTime = _player.currentTime;
-   const Float64 duration = CMTimeGetSeconds(playerDuration);
-   const Float64 currentTimeSecs = CMTimeGetSeconds(currentTime);
-
-   [[NSNotificationCenter defaultCenter] postNotificationName:@"RCTVideo_progress" object:nil userInfo:@{@"progress": [NSNumber numberWithDouble: currentTimeSecs / duration]}];
-
-   if( currentTimeSecs >= 0 && self.onVideoProgress) {
-      self.onVideoProgress(@{
-                             @"currentTime": [NSNumber numberWithFloat:CMTimeGetSeconds(currentTime)],
-                             @"playableDuration": [self calculatePlayableDuration],
-                             @"atValue": [NSNumber numberWithLongLong:currentTime.value],
-                             @"atTimescale": [NSNumber numberWithInt:currentTime.timescale],
-                             @"target": self.reactTag,
-                             @"seekableDuration": [self calculateSeekableDuration],
-                            });
-   }
+    const Float64 duration = CMTimeGetSeconds(playerDuration);
+    const Float64 currentTimeSecs = CMTimeGetSeconds(_playerItem.currentTime);
+    
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"RCTVideo_progress" object:nil userInfo:@{@"progress": [NSNumber numberWithDouble: currentTimeSecs / duration]}];
+    
+    if (!_playerViewController && !_fullscreenPlayerPresented) {
+        if( currentTimeSecs >= 0 && self.onVideoProgress) {
+            self.onVideoProgress(@{
+                                   @"currentTime": [NSNumber numberWithFloat:(Float64)_playerItem.currentTime.value/(int32_t)_playerItem.currentTime.timescale],
+                                   @"playableDuration": [self calculatePlayableDuration],
+                                   @"atValue": [NSNumber numberWithFloat:(Float64)_playerItem.currentTime.value/(int32_t)_playerItem.currentTime.timescale],
+                                   @"atTimescale": [NSNumber numberWithInt:(int32_t)_playerItem.currentTime.timescale],
+                                   @"target": self.reactTag,
+                                   @"seekableDuration": [self calculateSeekableDuration],
+                                   });
+        }
+    }
 }
 
 /*!
@@ -403,16 +414,16 @@ static int const RCTVideoUnset = -1;
   
   AVAssetTrack *videoAsset = [asset tracksWithMediaType:AVMediaTypeVideo].firstObject;
   AVMutableCompositionTrack *videoCompTrack = [mixComposition addMutableTrackWithMediaType:AVMediaTypeVideo preferredTrackID:kCMPersistentTrackID_Invalid];
-  [videoCompTrack insertTimeRange:CMTimeRangeMake(kCMTimeZero, videoAsset.timeRange.duration)
+  [videoCompTrack insertTimeRange:CMTimeRangeMake(CMTimeMakeWithSeconds((Float64)currentTime.floatValue, (int32_t)timescale.intValue), videoAsset.timeRange.duration)
                           ofTrack:videoAsset
-                           atTime:kCMTimeZero
+                           atTime:CMTimeMakeWithSeconds((Float64)currentTime.floatValue, (int32_t)timescale.intValue)
                             error:nil];
 
   AVAssetTrack *audioAsset = [asset tracksWithMediaType:AVMediaTypeAudio].firstObject;
   AVMutableCompositionTrack *audioCompTrack = [mixComposition addMutableTrackWithMediaType:AVMediaTypeAudio preferredTrackID:kCMPersistentTrackID_Invalid];
-  [audioCompTrack insertTimeRange:CMTimeRangeMake(kCMTimeZero, videoAsset.timeRange.duration)
+  [audioCompTrack insertTimeRange:CMTimeRangeMake(CMTimeMakeWithSeconds((Float64)currentTime.floatValue, (int32_t)timescale.intValue), videoAsset.timeRange.duration)
                           ofTrack:audioAsset
-                           atTime:kCMTimeZero
+                           atTime:CMTimeMakeWithSeconds((Float64)currentTime.floatValue, (int32_t)timescale.intValue)
                             error:nil];
 
   NSMutableArray* validTextTracks = [NSMutableArray array];
@@ -430,9 +441,9 @@ static int const RCTVideoUnset = -1;
     AVMutableCompositionTrack *textCompTrack = [mixComposition
                                                 addMutableTrackWithMediaType:AVMediaTypeText
                                                 preferredTrackID:kCMPersistentTrackID_Invalid];
-    [textCompTrack insertTimeRange:CMTimeRangeMake(kCMTimeZero, videoAsset.timeRange.duration)
+    [textCompTrack insertTimeRange:CMTimeRangeMake(CMTimeMakeWithSeconds((Float64)currentTime.floatValue, (int32_t)timescale.intValue), videoAsset.timeRange.duration)
                                ofTrack:textTrackAsset
-                                atTime:kCMTimeZero
+                                atTime:CMTimeMakeWithSeconds((Float64)currentTime.floatValue, (int32_t)timescale.intValue)
                                  error:nil];
   }
   if (validTextTracks.count != _textTracks.count) {
@@ -595,9 +606,11 @@ static int const RCTVideoUnset = -1;
   }
 
   if (_repeat) {
-    AVPlayerItem *item = [notification object];
-    [item seekToTime:kCMTimeZero];
-    [self applyModifiers];
+      if (!_fullscreenPlayerPresented && !_presentingViewController) {
+          AVPlayerItem *item = [notification object];
+          [item seekToTime:kCMTimeZero];
+          [self applyModifiers];
+      }
   } else {
     [self removePlayerTimeObserver];
   }
@@ -660,13 +673,13 @@ static int const RCTVideoUnset = -1;
 
 - (float)getCurrentTime
 {
-  return _playerItem != NULL ? CMTimeGetSeconds(_playerItem.currentTime) : 0;
+  return _playerItem != NULL ? (Float64)_playerItem.currentTime.value : 0;
 }
 
 - (void)setCurrentTime:(float)currentTime
 {
   NSDictionary *info = @{
-                         @"time": [NSNumber numberWithFloat:currentTime],
+                         @"time": [NSNumber numberWithFloat:(Float64)_playerItem.currentTime.value],
                          @"tolerance": [NSNumber numberWithInt:100]
                          };
   [self setSeek:info];
@@ -699,7 +712,7 @@ static int const RCTVideoUnset = -1;
           [self setPaused:false];
         }
         if(self.onVideoSeek) {
-          self.onVideoSeek(@{@"currentTime": [NSNumber numberWithFloat:CMTimeGetSeconds(item.currentTime)],
+          self.onVideoSeek(@{@"currentTime": [NSNumber numberWithFloat:(Float64)_playerItem.currentTime.value],
                              @"seekTime": seekTime,
                              @"target": self.reactTag});
         }
@@ -987,6 +1000,17 @@ static int const RCTVideoUnset = -1;
   return textTracks;
 }
 
+#pragma mark - Fullscreen AVURLAsset management
+
+- (NSURL *)urlOfCurrentlyPlayingInPlayer:(AVPlayer *)player{
+    // get current asset
+    AVAsset *currentPlayerAsset = player.currentItem.asset;
+    // make sure the current asset is an AVURLAsset
+    if (![currentPlayerAsset isKindOfClass:AVURLAsset.class]) return nil;
+    // return the NSURL
+    return [(AVURLAsset *)currentPlayerAsset URL];
+}
+
 - (BOOL)getFullscreen
 {
     return _fullscreenPlayerPresented;
@@ -1026,6 +1050,10 @@ static int const RCTVideoUnset = -1;
                 _fullscreenPlayerPresented = fullscreen;
                 if(self.onVideoFullscreenPlayerDidPresent) {
                     self.onVideoFullscreenPlayerDidPresent(@{@"target": self.reactTag});
+                    if ([_playerViewController.player rate] == 0) {
+                        [_playerViewController.player play];
+                    }
+                    [_playerViewController.player.currentItem seekToTime:CMTimeMakeWithSeconds((Float64)currentTime.floatValue, (int32_t)timescale.intValue)];
                 }
             }];
         }
@@ -1043,7 +1071,8 @@ static int const RCTVideoUnset = -1;
 {
     if( _player )
     {
-        _playerViewController = [self createPlayerViewController:_player withPlayerItem:_playerItem];
+        [_player setMuted:true];
+        _playerViewController = [self createPlayerViewControllerWithPlayerItem:_playerItem];
         // to prevent video from being animated when resizeMode is 'cover'
         // resize mode must be set before subview is added
         [self setResizeMode:_resizeMode];
