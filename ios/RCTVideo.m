@@ -1003,6 +1003,7 @@ static int const RCTVideoUnset = -1;
         }
         // Set presentation style to fullscreen
         [_playerViewController setModalPresentationStyle:UIModalPresentationFullScreen];
+        [_playerViewController setModalTransitionStyle:UIModalTransitionStyleCrossDissolve];
 
         // Find the nearest view controller
         UIViewController *viewController = [self firstAvailableUIViewController];
