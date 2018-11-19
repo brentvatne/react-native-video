@@ -35,7 +35,6 @@ import com.google.android.exoplayer2.PlaybackParameters;
 import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.SimpleExoPlayer;
 import com.google.android.exoplayer2.Timeline;
-import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory;
 import com.google.android.exoplayer2.mediacodec.MediaCodecRenderer;
 import com.google.android.exoplayer2.mediacodec.MediaCodecUtil;
 import com.google.android.exoplayer2.metadata.Metadata;
@@ -60,7 +59,9 @@ import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
 import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.DefaultAllocator;
 import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
-import com.google.android.exoplayer2.util.MimeTypes;
+import com.google.android.exoplayer2.upstream.cache.Cache;
+import com.google.android.exoplayer2.upstream.cache.CacheDataSourceFactory;
+import com.google.android.exoplayer2.upstream.cache.SimpleCache;
 import com.google.android.exoplayer2.util.Util;
 
 import java.net.CookieHandler;
@@ -96,6 +97,7 @@ class ReactExoplayerView extends FrameLayout implements
     private Handler mainHandler;
     private ExoPlayerView exoPlayerView;
 
+    private SimpleCache downloadCache;
     private DataSource.Factory mediaDataSourceFactory;
     private SimpleExoPlayer player;
     private DefaultTrackSelector trackSelector;
@@ -180,6 +182,8 @@ class ReactExoplayerView extends FrameLayout implements
     private void createViews() {
         clearResumePosition();
         mediaDataSourceFactory = buildDataSourceFactory(true);
+        downloadCache = ExoPlayerCache.getInstance(getContext());
+
         mainHandler = new Handler();
         if (CookieHandler.getDefault() != DEFAULT_COOKIE_MANAGER) {
             CookieHandler.setDefault(DEFAULT_COOKIE_MANAGER);
@@ -296,8 +300,8 @@ class ReactExoplayerView extends FrameLayout implements
             case C.TYPE_HLS:
                 return new HlsMediaSource(uri, mediaDataSourceFactory, mainHandler, null);
             case C.TYPE_OTHER:
-                return new ExtractorMediaSource(uri, mediaDataSourceFactory, new DefaultExtractorsFactory(),
-                        mainHandler, null);
+                return new ExtractorMediaSource.Factory(new CacheDataSourceFactory(downloadCache, mediaDataSourceFactory))
+                        .createMediaSource(uri);
             default: {
                 throw new IllegalStateException("Unsupported type: " + type);
             }
