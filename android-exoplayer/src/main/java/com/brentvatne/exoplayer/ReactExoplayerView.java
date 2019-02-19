@@ -1,5 +1,6 @@
 package com.brentvatne.exoplayer;
 
+import java.io.*;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
@@ -30,6 +31,11 @@ import com.google.android.exoplayer2.DefaultLoadControl;
 import com.google.android.exoplayer2.ExoPlaybackException;
 import com.google.android.exoplayer2.ExoPlayer;
 import com.google.android.exoplayer2.ExoPlayerFactory;
+import com.google.android.exoplayer2.upstream.cache.CacheDataSource;
+import com.google.android.exoplayer2.upstream.cache.CacheDataSourceFactory;
+import com.google.android.exoplayer2.upstream.cache.SimpleCache;
+import com.google.android.exoplayer2.upstream.cache.LeastRecentlyUsedCacheEvictor;
+import com.google.android.exoplayer2.source.ConcatenatingMediaSource;
 import com.google.android.exoplayer2.Format;
 import com.google.android.exoplayer2.PlaybackParameters;
 import com.google.android.exoplayer2.Player;
@@ -39,6 +45,7 @@ import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory;
 import com.google.android.exoplayer2.mediacodec.MediaCodecRenderer;
 import com.google.android.exoplayer2.mediacodec.MediaCodecUtil;
 import com.google.android.exoplayer2.metadata.Metadata;
+import com.google.android.exoplayer2.upstream.*;
 import com.google.android.exoplayer2.metadata.MetadataRenderer;
 import com.google.android.exoplayer2.source.BehindLiveWindowException;
 import com.google.android.exoplayer2.source.ExtractorMediaSource;
@@ -72,6 +79,8 @@ import java.net.CookiePolicy;
 import java.lang.Math;
 import java.util.Map;
 import java.lang.Object;
+import java.util.Arrays;
+import java.util.List;
 import java.util.ArrayList;
 import java.util.Locale;
 
@@ -142,6 +151,9 @@ class ReactExoplayerView extends FrameLayout implements
     private boolean disableFocus;
     private float mProgressUpdateInterval = 250.0f;
     private boolean playInBackground = false;
+    private final long cacheMaxSize = 100000000;
+    private static SimpleCache sDownloadCache;
+
     private Map<String, String> requestHeaders;
     private boolean mReportBandwidth = false;
     // \ End props
@@ -170,6 +182,32 @@ class ReactExoplayerView extends FrameLayout implements
             }
         }
     };
+
+
+    private SimpleCache cache;
+    private ConcatenatingMediaSource source;
+    private boolean prepared = false;
+
+    public DataSource.Factory enableCaching(DataSource.Factory ds) {
+        if(cache == null || cacheMaxSize <= 0) return ds;
+
+        return new CacheDataSourceFactory(cache, ds, CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR, cacheMaxSize);
+    }
+
+    // @Override
+    // public void destroy() {
+    //     super.destroy();
+
+    //     if(cache != null) {
+    //         try {
+    //             cache.release();
+    //             cache = null;
+    //         } catch(Exception ex) {
+    //             Log.w(Utils.LOG, "Couldn't release the cache properly", ex);
+    //         }
+    //     }
+    // }
+
 
     public ReactExoplayerView(ThemedReactContext context) {
         super(context);
@@ -333,6 +371,15 @@ class ReactExoplayerView extends FrameLayout implements
     }
 
     private void initializePlayer() {
+                if(cacheMaxSize > 0) {
+            File cacheDir = new File(getContext().getCacheDir(), "ReactNativeVideo");
+            
+            if (sDownloadCache == null) {
+             sDownloadCache = new SimpleCache(cacheDir, new LeastRecentlyUsedCacheEvictor(cacheMaxSize));
+            }
+        } else {
+            cache = null;
+        }
         if (player == null) {
             TrackSelection.Factory videoTrackSelectionFactory = new AdaptiveTrackSelection.Factory(BANDWIDTH_METER);
             trackSelector = new DefaultTrackSelector(videoTrackSelectionFactory);
@@ -383,28 +430,63 @@ class ReactExoplayerView extends FrameLayout implements
     }
 
     private MediaSource buildMediaSource(Uri uri, String overrideExtension) {
-        int type = Util.inferContentType(!TextUtils.isEmpty(overrideExtension) ? "." + overrideExtension
-                : uri.getLastPathSegment());
-        switch (type) {
-            case C.TYPE_SS:
-                return new SsMediaSource(uri, buildDataSourceFactory(false),
-                        new DefaultSsChunkSource.Factory(mediaDataSourceFactory), 
-                        minLoadRetryCount, SsMediaSource.DEFAULT_LIVE_PRESENTATION_DELAY_MS, 
-                        mainHandler, null);
-            case C.TYPE_DASH:
-                return new DashMediaSource(uri, buildDataSourceFactory(false),
-                        new DefaultDashChunkSource.Factory(mediaDataSourceFactory), 
-                        minLoadRetryCount, DashMediaSource.DEFAULT_LIVE_PRESENTATION_DELAY_MS,
-                        mainHandler, null);
-            case C.TYPE_HLS:
-                return new HlsMediaSource(uri, mediaDataSourceFactory, 
-                        minLoadRetryCount, mainHandler, null);
-            case C.TYPE_OTHER:
-                return new ExtractorMediaSource(uri, mediaDataSourceFactory, new DefaultExtractorsFactory(),
-                        mainHandler, null);
-            default: {
-                throw new IllegalStateException("Unsupported type: " + type);
+        DataSource.Factory ds;
+        String userAgent = null;
+        if(userAgent == null || userAgent.isEmpty())
+            userAgent = DataSourceUtil.getUserAgent(themedReactContext);
+
+            try {
+                final RawResourceDataSource raw = new RawResourceDataSource(this.themedReactContext);
+                raw.open(new DataSpec(uri));
+                ds = new DataSource.Factory() {
+                    @Override
+                    public DataSource createDataSource() {
+                        return raw;
+                    }
+                };
+            } catch(IOException ex) {
+                // Should never happen
+                // throw new RuntimeException(ex);
             }
+            // Creates a default http source factory, enabling cross protocol redirects
+            ds = new DefaultHttpDataSourceFactory(
+                    userAgent, null,
+                    DefaultHttpDataSource.DEFAULT_CONNECT_TIMEOUT_MILLIS,
+                    DefaultHttpDataSource.DEFAULT_READ_TIMEOUT_MILLIS,
+                    true
+            );
+
+        ds = enableCaching(ds);
+
+
+        String type = "default";
+
+        String[] formats = new String[]{"dash", "hls", "smoothstreaming"};
+
+        // Convert String Array to List
+        List<String> list = Arrays.asList(formats);
+        System.out.println(overrideExtension);
+        if(list.contains(overrideExtension)){
+            type = overrideExtension;
+        }
+
+        switch (type) {
+            case "smoothstreaming":
+                return new SsMediaSource.Factory(new DefaultSsChunkSource.Factory(ds), ds)
+                        .createMediaSource(uri);
+            case "dash":
+            System.out.println("dash");
+            return new DashMediaSource.Factory(new DefaultDashChunkSource.Factory(ds), ds)
+                        .createMediaSource(uri);
+            case "hls":
+System.out.println("hls");
+            return new HlsMediaSource.Factory(ds)
+                        .createMediaSource(uri);
+            default:
+            
+                System.out.println("default");
+                return new ExtractorMediaSource(uri, mediaDataSourceFactory, new DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true),
+                        mainHandler, null);
         }
     }
 
@@ -847,6 +929,11 @@ class ReactExoplayerView extends FrameLayout implements
             boolean isSourceEqual = uri.equals(srcUri);
 
             this.srcUri = uri;
+            System.out.println(uri.toString());
+            String uriStr = uri.toString();
+            if (!extension.equals("dash") && !extension.equals("hls") && !uriStr.startsWith("file")) {
+                this.srcUri = DataSourceUtil.getCacheUri(uri, themedReactContext);
+            }
             this.extension = extension;
             this.requestHeaders = headers;
             this.mediaDataSourceFactory = DataSourceUtil.getDefaultDataSourceFactory(this.themedReactContext, BANDWIDTH_METER, this.requestHeaders);
