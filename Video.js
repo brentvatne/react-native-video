@@ -378,6 +378,10 @@ Video.propTypes = {
   ]),
   minLoadRetryCount: PropTypes.number,
   maxBitRate: PropTypes.number,
+  maxResolution: PropTypes.shape({
+    width: PropTypes.number,
+    height: PropTypes.number,
+  }),
   resizeMode: PropTypes.string,
   poster: PropTypes.string,
   posterResizeMode: Image.propTypes.resizeMode,
