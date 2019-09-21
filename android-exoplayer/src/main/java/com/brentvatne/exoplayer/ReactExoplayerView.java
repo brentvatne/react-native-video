@@ -1169,6 +1169,15 @@ class ReactExoplayerView extends FrameLayout implements
         exoPlayerView.setHideShutterView(hideShutterView);
     }
 
+
+    public void setFilter(FilterType filterType) {
+        exoPlayerView.setFilter(filterType);
+    }
+
+    public void enableFilter(boolean filterEnabled) {
+        exoPlayerView.enableFilter(filterEnabled);
+    }
+   
     public void setBufferConfig(int newMinBufferMs, int newMaxBufferMs, int newBufferForPlaybackMs, int newBufferForPlaybackAfterRebufferMs) {
         minBufferMs = newMinBufferMs;
         maxBufferMs = newMaxBufferMs;
@@ -1177,6 +1186,7 @@ class ReactExoplayerView extends FrameLayout implements
         releasePlayer();
         initializePlayer();
     }
+
 
     /**
      * Handling controls prop
