@@ -24,8 +24,9 @@ static int const RCTVideoUnset = -1;
 
 @implementation RCTVideo
 {
-  AVPlayer *_player;
+  AVQueuePlayer *_player;
   AVPlayerItem *_playerItem;
+  AVPlayerLooper *_playerLooper;
   NSDictionary *_source;
   BOOL _playerItemObserversSet;
   BOOL _playerBufferEmpty;
@@ -203,10 +204,12 @@ static int const RCTVideoUnset = -1;
 - (void)dealloc
 {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
-  [self removePlayerLayer];
   [self removePlayerItemObservers];
   [_player removeObserver:self forKeyPath:playbackRate context:nil];
   [_player removeObserver:self forKeyPath:externalPlaybackActive context: nil];
+  [self removePlayerLayer];
+  _player = nil;
+  _playerLooper = nil;
 }
 
 #pragma mark - App lifecycle handlers
@@ -343,9 +346,11 @@ static int const RCTVideoUnset = -1;
 - (void)setSrc:(NSDictionary *)source
 {
   _source = source;
-  [self removePlayerLayer];
   [self removePlayerTimeObserver];
   [self removePlayerItemObservers];
+  [self removePlayerLayer];
+  _player = nil;
+  _playerLooper = nil;
 
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t) 0), dispatch_get_main_queue(), ^{
 
@@ -367,9 +372,15 @@ static int const RCTVideoUnset = -1;
         _isExternalPlaybackActiveObserverRegistered = NO;
       }
         
-      _player = [AVPlayer playerWithPlayerItem:_playerItem];
+      _player = [AVQueuePlayer playerWithPlayerItem:_playerItem];
       _player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
         
+      if (_repeat) {
+        _playerLooper = [AVPlayerLooper playerLooperWithPlayer:_player templateItem:_playerItem];
+      } else {
+        _playerLooper = nil;
+      }
+
       [_player addObserver:self forKeyPath:playbackRate options:0 context:nil];
       _playbackRateObserverRegistered = YES;
       
@@ -773,11 +784,7 @@ static int const RCTVideoUnset = -1;
     self.onVideoEnd(@{@"target": self.reactTag});
   }
   
-  if (_repeat) {
-    AVPlayerItem *item = [notification object];
-    [item seekToTime:kCMTimeZero];
-    [self applyModifiers];
-  } else {
+  if (!_repeat) {
     [self removePlayerTimeObserver];
   }
 }
@@ -992,6 +999,11 @@ static int const RCTVideoUnset = -1;
 
 - (void)setRepeat:(BOOL)repeat {
   _repeat = repeat;
+  if (_repeat && _player && _playerItem && !_playerLooper) {
+    _playerLooper = [AVPlayerLooper playerLooperWithPlayer:_player templateItem:_playerItem];
+  } else if (!_repeat && _playerLooper) {
+    _playerLooper = nil;
+  }
 }
 
 - (void)setMediaSelectionTrackForCharacteristic:(AVMediaCharacteristic)characteristic
@@ -1504,9 +1516,6 @@ static int const RCTVideoUnset = -1;
     [_player removeObserver:self forKeyPath:externalPlaybackActive context:nil];
     _isExternalPlaybackActiveObserverRegistered = NO;
   }
-  _player = nil;
-  
-  [self removePlayerLayer];
   
   [_playerViewController.contentOverlayView removeObserver:self forKeyPath:@"frame"];
   [_playerViewController removeObserver:self forKeyPath:readyForDisplayKeyPath];
@@ -1520,6 +1529,10 @@ static int const RCTVideoUnset = -1;
   
   _eventDispatcher = nil;
   [[NSNotificationCenter defaultCenter] removeObserver:self];
+
+  [self removePlayerLayer];
+  _player = nil;
+  _playerLooper = nil;
   
   [super removeFromSuperview];
 }
