@@ -13,6 +13,7 @@ import android.view.View;
 import android.view.Window;
 import android.view.accessibility.CaptioningManager;
 import android.widget.FrameLayout;
+import android.support.v4.media.session.MediaSessionCompat;
 
 import com.brentvatne.react.R;
 import com.brentvatne.receiver.AudioBecomingNoisyReceiver;
@@ -62,6 +63,7 @@ import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.DefaultAllocator;
 import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
 import com.google.android.exoplayer2.util.Util;
+import com.google.android.exoplayer2.ext.mediasession.MediaSessionConnector;
 
 import java.net.CookieHandler;
 import java.net.CookieManager;
@@ -89,6 +91,7 @@ class ReactExoplayerView extends FrameLayout implements
         DEFAULT_COOKIE_MANAGER.setCookiePolicy(CookiePolicy.ACCEPT_ORIGINAL_SERVER);
     }
 
+    private final MediaSessionCompat mediaSession = new MediaSessionCompat(getContext(), "tag");
     private final VideoEventEmitter eventEmitter;
     private final ReactExoplayerConfig config;
     private final DefaultBandwidthMeter bandwidthMeter;
@@ -398,6 +401,11 @@ class ReactExoplayerView extends FrameLayout implements
                 initializePlayerControl();
                 setControls(controls);
                 applyModifiers();
+
+                //Use Media Session Connector from the ExoPlayer library to enable MediaSession Controls in PIP.
+                MediaSessionConnector mediaSessionConnector = new MediaSessionConnector(mediaSession);
+                mediaSessionConnector.setPlayer(player, null);
+                mediaSession.setActive(true);
             }
         }, 1);
     }
@@ -477,6 +485,7 @@ class ReactExoplayerView extends FrameLayout implements
         themedReactContext.removeLifecycleEventListener(this);
         audioBecomingNoisyReceiver.removeListener();
         bandwidthMeter.removeEventListener(this);
+        mediaSession.release();
     }
 
     private boolean requestAudioFocus() {
@@ -641,6 +650,14 @@ class ReactExoplayerView extends FrameLayout implements
                 // Setting the visibility for the playerControlView
                 if (playerControlView != null) {
                     playerControlView.show();
+                }
+
+                /*
+                 * If play is in playing state, but PAUSED prop is TRUE, report
+                 * external play/pause state change.
+                 */
+                if (playWhenReady == isPaused) {
+                   eventEmitter.externalPauseToggled(playWhenReady);
                 }
                 break;
             case Player.STATE_ENDED:
