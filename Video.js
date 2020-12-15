@@ -463,6 +463,12 @@ Video.propTypes = {
   }),
   stereoPan: PropTypes.number,
   rate: PropTypes.number,
+  pitchAlgorithm: PropTypes.oneOf([
+    'lowQualityZeroLatency',
+    'spectral',
+    'timeDomain',
+    'varispeed',
+  ]),
   pictureInPicture: PropTypes.bool,
   playInBackground: PropTypes.bool,
   preferredForwardBufferDuration: PropTypes.number,

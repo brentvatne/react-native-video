@@ -40,6 +40,7 @@ RCT_EXPORT_VIEW_PROPERTY(pictureInPicture, BOOL);
 RCT_EXPORT_VIEW_PROPERTY(ignoreSilentSwitch, NSString);
 RCT_EXPORT_VIEW_PROPERTY(mixWithOthers, NSString);
 RCT_EXPORT_VIEW_PROPERTY(rate, float);
+RCT_EXPORT_VIEW_PROPERTY(pitchAlgorithm, NSString);
 RCT_EXPORT_VIEW_PROPERTY(seek, NSDictionary);
 RCT_EXPORT_VIEW_PROPERTY(currentTime, float);
 RCT_EXPORT_VIEW_PROPERTY(fullscreen, BOOL);
