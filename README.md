@@ -319,6 +319,7 @@ var styles = StyleSheet.create({
 ### Event props
 * [onAudioBecomingNoisy](#onaudiobecomingnoisy)
 * [onBandwidthUpdate](#onbandwidthupdate)
+* [onBuffer](#onbuffer)
 * [onEnd](#onend)
 * [onExternalPlaybackChange](#onexternalplaybackchange)
 * [onFullscreenPlayerWillPresent](#onfullscreenplayerwillpresent)
@@ -923,6 +924,24 @@ Example:
 Note: On Android ExoPlayer, you must set the [reportBandwidth](#reportbandwidth) prop to enable this event. This is due to the high volume of events generated.
 
 Platforms: Android ExoPlayer
+
+#### onBuffer
+Callback function that is called when the player buffers.
+
+Payload:
+
+Property | Type | Description
+--- | --- | ---
+isBuffering | boolean | Boolean indicating whether buffering is active
+
+Example:
+```
+{
+  isBuffering: true
+}
+```
+
+Platforms: Android ExoPlayer, iOS
 
 #### onEnd
 Callback function that is called when the player reaches the end of the media.
