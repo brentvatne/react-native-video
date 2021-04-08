@@ -3,6 +3,7 @@
 ### Version 5.1.0-alpha9
 
 - Add ARM64 support for windows [#2137](https://github.com/react-native-community/react-native-video/pull/2137)
+- Fix `pictureInPicture` being disabled [#2297](https://github.com/react-native-community/react-native-video/pull/2297)
 
 ### Version 5.1.0-alpha8
 
