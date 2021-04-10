@@ -10,6 +10,7 @@ import android.os.Message;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.accessibility.CaptioningManager;
 import android.widget.FrameLayout;
@@ -81,7 +82,7 @@ import java.util.UUID;
 import java.util.Map;
 
 @SuppressLint("ViewConstructor")
-class ReactExoplayerView extends FrameLayout implements
+public class ReactExoplayerView extends FrameLayout implements
         LifecycleEventListener,
         Player.EventListener,
         BandwidthMeter.EventListener,
@@ -163,6 +164,8 @@ class ReactExoplayerView extends FrameLayout implements
     private final AudioManager audioManager;
     private final AudioBecomingNoisyReceiver audioBecomingNoisyReceiver;
 
+    public ReactExoplayerViewDelegateInterface delegate;
+
     private final Handler progressHandler = new Handler() {
         @Override
         public void handleMessage(Message msg) {
@@ -182,7 +185,7 @@ class ReactExoplayerView extends FrameLayout implements
             }
         }
     };
-    
+
     public double getPositionInFirstPeriodMsForCurrentWindow(long currentPosition) {
         Timeline.Window window = new Timeline.Window();
         if(!player.getCurrentTimeline().isEmpty()) {    
@@ -490,6 +493,17 @@ class ReactExoplayerView extends FrameLayout implements
     }
 
     private MediaSource buildMediaSource(Uri uri, String overrideExtension) {
+        return buildMediaSource(uri, overrideExtension, true);
+    }
+
+    private MediaSource buildMediaSource(Uri uri, String overrideExtension, boolean useDelegate) {
+        if (delegate != null && useDelegate) {
+            MediaSource mediaSource = delegate.buildMediaSource(this, uri, overrideExtension);
+
+            if (mediaSource != null) {
+                return mediaSource;
+            }
+        }
         int type = Util.inferContentType(!TextUtils.isEmpty(overrideExtension) ? "." + overrideExtension
                 : uri.getLastPathSegment());
         switch (type) {
@@ -1000,7 +1014,16 @@ class ReactExoplayerView extends FrameLayout implements
     // ReactExoplayerViewManager public api
 
     public void setSrc(final Uri uri, final String extension, Map<String, String> headers) {
+        setSrc(uri, extension, headers, true);
+    }
+
+    public void setSrc(final Uri uri, final String extension, Map<String, String> headers, boolean useDelegate) {
         if (uri != null) {
+            if (useDelegate && delegate != null) {
+                if (delegate.setSrc(this, uri, extension, headers)) {
+                    return;
+                }
+            }
             boolean isOriginalSourceNull = srcUri == null;
             boolean isSourceEqual = uri.equals(srcUri);
 
@@ -1372,5 +1395,26 @@ class ReactExoplayerView extends FrameLayout implements
                 removeViewAt(indexOfPC);
             }
         }
+    }
+
+    public void setDelegate(ReactExoplayerViewDelegateInterface reactExoplayerViewDelegate) {
+        this.delegate = reactExoplayerViewDelegate;
+    }
+
+    public static ReactExoplayerView findRCTVideo(View view) {
+        ReactExoplayerView reactExoplayerView = null;
+        if (view instanceof ReactExoplayerView) {
+            reactExoplayerView = (ReactExoplayerView) view;
+        } else if (view instanceof ViewGroup) {
+            ViewGroup viewGroup = (ViewGroup) view;
+            int count = viewGroup.getChildCount();
+            for (int i = 0; i < count; i++) {
+                reactExoplayerView = findRCTVideo(viewGroup.getChildAt(i));
+                if (reactExoplayerView != null) {
+                    break;
+                }
+            }
+        }
+        return reactExoplayerView;
     }
 }
