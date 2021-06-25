@@ -17,6 +17,7 @@ import android.view.View;
 import android.view.Window;
 import android.webkit.CookieManager;
 import android.widget.MediaController;
+import android.content.pm.ActivityInfo;
 
 import com.android.vending.expansion.zipfile.APKExpansionSupport;
 import com.android.vending.expansion.zipfile.ZipResourceFile;
@@ -133,6 +134,7 @@ public class ReactVideoView extends ScalableVideoView implements
     private boolean mPlayInBackground = false;
     private boolean mBackgroundPaused = false;
     private boolean mIsFullscreen = false;
+    private boolean mRequestOrientationInFullscreen = false;
 
     private int mMainVer = 0;
     private int mPatchVer = 0;
@@ -489,6 +491,10 @@ public class ReactVideoView extends ScalableVideoView implements
             }
         }
     }
+        
+    public void setRequestOrientationInFullscreen(boolean requestOrientationInFullscreen) {
+        mRequestOrientationInFullscreen = requestOrientationInFullscreen;
+    }
 
     public void setFullscreen(boolean isFullscreen) {
         if (isFullscreen == mIsFullscreen) {
@@ -514,11 +520,21 @@ public class ReactVideoView extends ScalableVideoView implements
             }
             mEventEmitter.receiveEvent(getId(), Events.EVENT_FULLSCREEN_WILL_PRESENT.toString(), null);
             decorView.setSystemUiVisibility(uiOptions);
+            
+            if (mRequestOrientationInFullscreen) {
+                activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+            }
+            
             mEventEmitter.receiveEvent(getId(), Events.EVENT_FULLSCREEN_DID_PRESENT.toString(), null);
         } else {
             uiOptions = View.SYSTEM_UI_FLAG_VISIBLE;
             mEventEmitter.receiveEvent(getId(), Events.EVENT_FULLSCREEN_WILL_DISMISS.toString(), null);
             decorView.setSystemUiVisibility(uiOptions);
+            
+            if (mRequestOrientationInFullscreen) {
+                activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            }
+            
             mEventEmitter.receiveEvent(getId(), Events.EVENT_FULLSCREEN_DID_DISMISS.toString(), null);
         }
     }
@@ -534,7 +550,6 @@ public class ReactVideoView extends ScalableVideoView implements
     }
 
     public void setPlayInBackground(final boolean playInBackground) {
-
         mPlayInBackground = playInBackground;
     }
 
