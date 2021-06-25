@@ -836,6 +836,7 @@ static int const RCTVideoUnset = -1;
     [item seekToTime:kCMTimeZero];
     [self applyModifiers];
   } else {
+    [self setPaused:true];
     [self removePlayerTimeObserver];
   }
 }
