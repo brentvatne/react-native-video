@@ -3,8 +3,11 @@ package com.brentvatne.exoplayer;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Message;
 import android.text.TextUtils;
@@ -177,6 +180,7 @@ class ReactExoplayerView extends FrameLayout implements
                         long bufferedDuration = player.getBufferedPercentage() * player.getDuration() / 100;
                         eventEmitter.progressChanged(pos, bufferedDuration, player.getDuration(), getPositionInFirstPeriodMsForCurrentWindow(pos));
                         msg = obtainMessage(SHOW_PROGRESS);
+                        removeMessages(SHOW_PROGRESS);
                         sendMessageDelayed(msg, Math.round(mProgressUpdateInterval));
                     }
                     break;
@@ -574,14 +578,28 @@ class ReactExoplayerView extends FrameLayout implements
         audioBecomingNoisyReceiver.removeListener();
         bandwidthMeter.removeEventListener(this);
     }
-
+    private Handler mHandler = new Handler();
     private boolean requestAudioFocus() {
         if (disableFocus || srcUri == null || this.hasAudioFocus) {
             return true;
         }
-        int result = audioManager.requestAudioFocus(this,
-                AudioManager.STREAM_MUSIC,
-                AudioManager.AUDIOFOCUS_GAIN);
+        int result = AudioManager.AUDIOFOCUS_REQUEST_FAILED;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            result = audioManager.requestAudioFocus(this,
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.AUDIOFOCUS_GAIN);
+        } else { // API 26 and later
+            AudioAttributes mPlaybackAttributes = new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build();
+            AudioFocusRequest mFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(mPlaybackAttributes)
+                    .setAcceptsDelayedFocusGain(true)
+                    .setOnAudioFocusChangeListener(this, mHandler)
+                    .build();
+            result = audioManager.requestAudioFocus(mFocusRequest);
+        }
         return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
     }
 
