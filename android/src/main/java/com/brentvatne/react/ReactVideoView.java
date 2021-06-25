@@ -299,7 +299,7 @@ public class ReactVideoView extends ScalableVideoView implements
                  */
                 setDataSource(mThemedReactContext, parsedUrl, headers);
             } else if (isAsset) {
-                if (uriString.startsWith("content://")) {
+                if (uriString.startsWith("content://") || uriString.startsWith("file://")) {
                     Uri parsedUrl = Uri.parse(uriString);
                     setDataSource(mThemedReactContext, parsedUrl);
                 } else {
